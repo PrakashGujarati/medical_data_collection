@@ -819,6 +819,31 @@ async function scrapeHospitalDetails(url) {
  * Process Clinic URLs from an XML File
  * @param {string} xmlFilePath Path to the XML file
  */
+async function scrapeHospitalName(url) {
+  // Launch Puppeteer browser
+  const browser = await puppeteer.launch({ headless: true }); // Set headless to false for debugging
+  const page = await browser.newPage();
+
+  try {
+    // Navigate to the URL
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    // Scrape the hospital name
+    const hospitalName = await page.$eval(
+      'div.pure-u-4-24 img[data-qa-id="logo"]',
+      img => img.alt // Get the alt attribute of the image
+    );
+
+    console.log(`Hospital Name: ${hospitalName}`);
+    return hospitalName;
+  } catch (error) {
+    console.error("Error scraping hospital name:", error);
+    return null;
+  } finally {
+    // Close the browser
+    await browser.close();
+  }
+}
 
 async function processHospitalUrlsFromXml(xmlFilePath) {
   // Read XML file
@@ -861,15 +886,59 @@ async function processHospitalUrlsFromXml(xmlFilePath) {
   console.log(`Found ${hospitalUrls.size} hospital URLs to process.`);
 
   // Loop over each hospital URL and perform scraping or processing
-  for (const url of hospitalUrls) {
-    console.log(`Processing Hospital URL: ${url}`);
+  // for (const url of hospitalUrls) {
+  //   console.log(`Processing Hospital URL: ${url}`);
+  //   try {
+  //     // Invoke your scraping function here when ready
+  //     await scrapeHospitalDetails(url);
+  //   } catch (error) {
+  //     console.error(`Error processing ${url}:`, error);
+  //     logError(`Processing Error: ${error.message}`, url);
+  //   }
+  // }
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log("Connected to MongoDB via Mongoose");
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    // If desired, log to an error-logging service
+    // logError(`MongoDB connection error: ${err.message}`);
+    return; // if you cannot connect, stop here
+  }
+
+  // 5) Check existing clinic URLs before scraping
+  for (const url of hospitalUrls) { 
+    console.log(`Hospital URL: ${url}`);
     try {
-      // Invoke your scraping function here when ready
-      await scrapeHospitalDetails(url);
+      const hname = await scrapeHospitalName(url);
+      console.log(hname)
+      // Check if this Hospital URL already exists
+      const existingHospital = await Hospital.findOne({
+        name: hname,
+      });
+
+      if (!existingHospital) {
+        // If not found, scrape Hospital details
+        await scrapeHospitalDetails(url);
+      } else {
+        console.log(
+          `Hospital with URL "${url}" already exists in the database. Skipping...`
+        );
+      }
     } catch (error) {
       console.error(`Error processing ${url}:`, error);
-      logError(`Processing Error: ${error.message}`, url);
     }
+  }
+
+  console.log("All clinic URLs have been checked and processed.");
+
+  // 6) (Optional) Close the Mongoose connection if you are done
+  //    If your application continues running (e.g., server), you may keep it open.
+  try {
+    await mongoose.disconnect();
+    console.log("Mongoose connection closed.");
+  } catch (err) {
+    console.error("Error closing Mongoose connection:", err);
   }
 
   console.log("All hospital URLs have been processed.");
