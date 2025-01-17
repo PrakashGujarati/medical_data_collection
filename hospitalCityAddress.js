@@ -9,6 +9,7 @@ const mongoUri =
 mongoose
   .connect(mongoUri, {
     useNewUrlParser: true,
+    useUnifiedTopology: true,
   })
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => {
@@ -61,12 +62,19 @@ async function getAddressAndCityFromLatLng(lat, lng) {
   }
 }
 
-async function updateHospitalAddresses() {
+async function updateHospitalAddresses(startIndex, endIndex) {
   try {
-    // Retrieve hospitals with an addressUrl field
-    const hospitals = await Hospital.find({ addressUrl: { $exists: true } });
+    // Calculate number of documents to process
+    const skipCount = startIndex;
+    const limitCount = endIndex - startIndex;
+
+    // Retrieve a subset of hospitals with an addressUrl field based on skip and limit
+    const hospitals = await Hospital.find({ addressUrl: { $exists: true } })
+      .skip(skipCount)
+      .limit(limitCount);
+
     if (!hospitals.length) {
-      console.log("No hospitals found with an addressUrl.");
+      console.log("No hospitals found in the specified range.");
       return;
     }
 
@@ -107,5 +115,8 @@ async function updateHospitalAddresses() {
   }
 }
 
-// Start the update process
-updateHospitalAddresses();
+// Read start and end indices from command-line arguments
+const startIndex = parseInt(process.argv[2], 10) || 0;
+const endIndex = parseInt(process.argv[3], 10) || startIndex + 10;
+
+updateHospitalAddresses(startIndex, endIndex);
