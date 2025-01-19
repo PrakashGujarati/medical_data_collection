@@ -23,35 +23,16 @@ const Doctor = mongoose.model("Doctor", doctorSchema);
 // Custom sleep function for delays
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// "https://www.healthfrog.in/doctor/list/punjab",
-// "https://www.healthfrog.in/doctor/list/telangana",
-// "https://www.healthfrog.in/doctor/list/uttar-pradesh",
-
-const urls = [
-  "https://www.healthfrog.in/doctor/list/gujarat",
-  "https://www.healthfrog.in/doctor/list/maharashtra",
-  "https://www.healthfrog.in/doctor/list/mizoram",
-  "https://www.healthfrog.in/doctor/list/rajasthan",
-  "https://www.healthfrog.in/doctor/list/kerala",
-  "https://www.healthfrog.in/doctor/list/uttarakhand",
-  "https://www.healthfrog.in/doctor/list/haryana",
-  "https://www.healthfrog.in/doctor/list/andhra-pradesh",
-  "https://www.healthfrog.in/doctor/list/jammu-and-kashmir",
-  "https://www.healthfrog.in/doctor/list/tamil-nadu",
-  "https://www.healthfrog.in/doctor/list/madhya-pradesh",
-  "https://www.healthfrog.in/doctor/list/bihar",
-  "https://www.healthfrog.in/doctor/list/karnataka",
-  "https://www.healthfrog.in/doctor/list/himachal-pradesh",
-  "https://www.healthfrog.in/doctor/list/assam",
-  "https://www.healthfrog.in/doctor/list/west-bengal",
-  "https://www.healthfrog.in/doctor/list/chhattisgarh",
-  "https://www.healthfrog.in/doctor/list/manipur",
-  "https://www.healthfrog.in/doctor/list/jharkhand",
-  "https://www.healthfrog.in/doctor/list/chandigarh",
-  "https://www.healthfrog.in/doctor/list/delhi",
-  "https://www.healthfrog.in/doctor/list/pondicherry",
-  "https://www.healthfrog.in/doctor/list/goa",
-];
+// Instead of a fixed array, get the URL from command-line arguments
+let urls = [];
+if (process.argv[2]) {
+  urls.push(process.argv[2]);
+} else {
+  console.error(
+    "No URL provided. Please pass a URL as a command-line argument."
+  );
+  process.exit(1);
+}
 
 async function scrapePage(page, url, fileName) {
   console.log(`Navigating to ${url}`);
@@ -76,6 +57,8 @@ async function scrapePage(page, url, fileName) {
 
   let loadMoreCount = 0;
   let accumulatedData = [];
+
+  const fileName = url.split("/").filter(Boolean).pop() || "index.json";
 
   if (fs.existsSync(fileName)) {
     try {
