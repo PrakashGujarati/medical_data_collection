@@ -7,7 +7,7 @@ const MONGODB_URI =
   "mongodb+srv://prakashgujaratiwork:1h8OT1TBS9710vcy@cluster0.5iu6l.mongodb.net/medipractweb_clinic";
 const GOOGLE_API_KEY = "AIzaSyD1QD2NpGM--cu3r2Hp-3VKIlVBrAGoX7o"; // Replace with your API key
 
-// Define a Mongoose schema and model for doctors, including mobile and phone fields
+// Define a Mongoose schema and model for doctors, including specialty field
 const doctorSchema = new mongoose.Schema({
   name: String,
   address: String,
@@ -15,6 +15,7 @@ const doctorSchema = new mongoose.Schema({
   city: String,
   mobile: String,
   phone: String,
+  specialty: String, // Added specialty field
   // Add other fields as necessary
 });
 
@@ -121,7 +122,7 @@ async function scrapeDoctorProfile(doctor) {
       result.phone = phoneMatch ? phoneMatch[0].trim() : null;
     }
 
-    // Extract specialty from tags (if needed)
+    // Extract specialty from tags
     const specialtyAnchor = document.querySelector(
       ".tags span.label-default a"
     );
@@ -132,7 +133,6 @@ async function scrapeDoctorProfile(doctor) {
     return result;
   });
 
-  // Use the doctor's current address from the database to find the city
   if (doctor.address) {
     doctorData.city = await addressToCity(doctor.address);
   } else {
@@ -141,7 +141,6 @@ async function scrapeDoctorProfile(doctor) {
   await browser.close();
   return doctorData;
 }
-
 async function cleanAndProcessDoctors(startIndex, endIndex) {
   try {
     await mongoose.connect(MONGODB_URI);
@@ -159,7 +158,6 @@ async function cleanAndProcessDoctors(startIndex, endIndex) {
       if (cleanedAddr && cleanedAddr !== originalAddress) {
         doctor.address = cleanedAddr;
         await doctor.save();
-        console.log(`Updated address for doctor ${doctor._id}`);
       }
 
       // Scrape profile data and update doctor document
@@ -170,10 +168,10 @@ async function cleanAndProcessDoctors(startIndex, endIndex) {
           if (scrapedData.city) doctor.city = scrapedData.city;
           if (scrapedData.mobile) doctor.mobile = scrapedData.mobile;
           if (scrapedData.phone) doctor.phone = scrapedData.phone;
+          if (scrapedData.specialty) doctor.specialty = scrapedData.specialty;
 
-          // Save the updated doctor document
           await doctor.save();
-          console.log(`Updated contact info for doctor ${doctor._id}`);
+          console.log(`Updated info for doctor ${doctor._id}`);
         }
       }
     }
