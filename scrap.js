@@ -23,11 +23,10 @@ const Doctor = mongoose.model("Doctor", doctorSchema);
 // Custom sleep function for delays
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// "https://www.healthfrog.in/doctor/list/punjab",
-// "https://www.healthfrog.in/doctor/list/telangana",
-// "https://www.healthfrog.in/doctor/list/uttar-pradesh",
-
 const urls = [
+  "https://www.healthfrog.in/doctor/list/punjab",
+  "https://www.healthfrog.in/doctor/list/telangana",
+  "https://www.healthfrog.in/doctor/list/uttar-pradesh",
   "https://www.healthfrog.in/doctor/list/gujarat",
   "https://www.healthfrog.in/doctor/list/maharashtra",
   "https://www.healthfrog.in/doctor/list/mizoram",
@@ -124,6 +123,32 @@ async function scrapePage(page, url, fileName) {
 
       const initialDataCount = accumulatedData.length;
       // Extract and store new doctor data
+      // for (let i = 0; i < listings.length; i++) {
+      //   const listing = listings.eq(i);
+      //   const titleTag = listing.find("h3 a");
+      //   const name = titleTag.text().trim() || null;
+      //   const uri = titleTag.attr("href") || null;
+      //   const address = listing.find("p").text().trim() || null;
+
+      //   if (!accumulatedData.find((item) => item.uri === uri)) {
+      //     const doctorData = { name, address, uri };
+      //     accumulatedData.push(doctorData);
+
+      //     try {
+      //       const existingDoctor = await Doctor.findOne({ uri });
+      //       if (!existingDoctor) {
+      //         await Doctor.create(doctorData);
+      //         console.log(`Saved doctor to DB: ${name}`);
+      //       } else {
+      //         console.log(`Doctor already in DB: ${name}`);
+      //       }
+      //     } catch (dbError) {
+      //       console.error("Error saving to DB:", dbError);
+      //     }
+      //   }
+      // }
+
+      // Inside the scrapePage function, within the while loop after fetching listings...
       for (let i = 0; i < listings.length; i++) {
         const listing = listings.eq(i);
         const titleTag = listing.find("h3 a");
@@ -131,18 +156,26 @@ async function scrapePage(page, url, fileName) {
         const uri = titleTag.attr("href") || null;
         const address = listing.find("p").text().trim() || null;
 
+        // Skip processing if doctor already exists in the database
+        try {
+          const existingDoctor = await Doctor.findOne({ uri });
+          if (existingDoctor) {
+            console.log(`Doctor already in DB: ${name}. Skipping...`);
+            continue; // Move to the next iteration if doctor exists
+          }
+        } catch (dbError) {
+          console.error("Error checking DB for existing doctor:", dbError);
+          continue; // Skip current iteration on error
+        }
+
+        // Also ensure it's not a duplicate in our accumulated data
         if (!accumulatedData.find((item) => item.uri === uri)) {
           const doctorData = { name, address, uri };
           accumulatedData.push(doctorData);
 
           try {
-            const existingDoctor = await Doctor.findOne({ uri });
-            if (!existingDoctor) {
-              await Doctor.create(doctorData);
-              console.log(`Saved doctor to DB: ${name}`);
-            } else {
-              console.log(`Doctor already in DB: ${name}`);
-            }
+            await Doctor.create(doctorData);
+            console.log(`Saved doctor to DB: ${name}`);
           } catch (dbError) {
             console.error("Error saving to DB:", dbError);
           }
@@ -179,7 +212,30 @@ async function scrapePage(page, url, fileName) {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
 
-  for (const url of urls) {
+  // Retrieve URL index or specific URL from command-line arguments
+  const arg = process.argv[2];
+  let selectedUrls = [];
+
+  if (arg) {
+    const index = parseInt(arg, 10);
+    // If a valid index is provided and within bounds, select that URL
+    if (!isNaN(index) && index >= 0 && index < urls.length) {
+      selectedUrls.push(urls[index]);
+    } else {
+      console.error(
+        "Invalid index provided. Please provide a valid URL index between 0 and",
+        urls.length - 1
+      );
+      await browser.close();
+      mongoose.connection.close();
+      process.exit(1);
+    }
+  } else {
+    // If no argument given, process all URLs
+    selectedUrls = urls;
+  }
+
+  for (const url of selectedUrls) {
     try {
       // Determine filename from the last segment of URL
       const parts = url.split("/").filter(Boolean);

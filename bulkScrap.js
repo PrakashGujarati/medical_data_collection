@@ -21,6 +21,9 @@ const Doctor = mongoose.model("Doctor", doctorSchema);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const urls = [
+  "https://www.healthfrog.in/doctor/list/punjab",
+  "https://www.healthfrog.in/doctor/list/telangana",
+  "https://www.healthfrog.in/doctor/list/uttar-pradesh",
   "https://www.healthfrog.in/doctor/list/gujarat",
   "https://www.healthfrog.in/doctor/list/maharashtra",
   "https://www.healthfrog.in/doctor/list/mizoram",
