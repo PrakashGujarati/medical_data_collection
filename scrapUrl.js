@@ -58,8 +58,6 @@ async function scrapePage(page, url, fileName) {
   let loadMoreCount = 0;
   let accumulatedData = [];
 
-  const fileName = url.split("/").filter(Boolean).pop() || "index.json";
-
   if (fs.existsSync(fileName)) {
     try {
       const existingData = JSON.parse(fs.readFileSync(fileName, "utf-8"));
