@@ -1,25 +1,13 @@
+/**
+ * Usage:
+ *   node scrape-doctor.js <doctorProfileURL>
+ */
+
 const puppeteer = require("puppeteer");
 const axios = require("axios");
-const mongoose = require("mongoose");
 
-// Replace with your actual connection string
-const MONGODB_URI =
-  "mongodb+srv://prakashgujaratiwork:1h8OT1TBS9710vcy@cluster0.5iu6l.mongodb.net/medipractweb_clinic";
-const GOOGLE_API_KEY = "AIzaSyD1QD2NpGM--cu3r2Hp-3VKIlVBrAGoX7o"; // Replace with your API key
-
-// Define a Mongoose schema and model for doctors, including specialty field
-const doctorSchema = new mongoose.Schema({
-  name: String,
-  address: String,
-  uri: String,
-  city: String,
-  mobile: String,
-  phone: String,
-  specialty: String, // Added specialty field
-  // Add other fields as necessary
-});
-
-const Doctor = mongoose.model("Doctor", doctorSchema);
+// Replace with your actual API key
+const GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY_HERE";
 
 // Utility function to clean up the address string
 function cleanAddress(address) {
@@ -30,6 +18,7 @@ function cleanAddress(address) {
     .trim();
 }
 
+// Fetch city name from Indian PIN code (uses the api.postalpincode.in service)
 async function cityFromPincode(pincode) {
   try {
     const response = await axios.get(
@@ -48,10 +37,12 @@ async function cityFromPincode(pincode) {
   return null;
 }
 
+// Use the Google Geocoding API to get the city name from an address
 async function addressToCity(address) {
   try {
     const cleanedAddress = cleanAddress(address);
 
+    // Attempt using Google Geocoding
     let response = await axios.get(
       "https://maps.googleapis.com/maps/api/geocode/json",
       {
@@ -66,12 +57,14 @@ async function addressToCity(address) {
     if (results && results.length > 0) {
       const components = results[0].address_components;
       for (const comp of components) {
+        // 'locality' is usually the city
         if (comp.types.includes("locality")) {
           return comp.long_name;
         }
       }
     }
 
+    // If Geocoding didn't yield a city, try extracting PIN code
     const pinMatch = cleanedAddress.match(/\b\d{6}\b/);
     if (pinMatch) {
       const pincode = pinMatch[0];
@@ -86,15 +79,19 @@ async function addressToCity(address) {
   return null;
 }
 
-async function scrapeDoctorProfile(doctor) {
+// Main function to scrape the doctor profile from a given URL
+async function scrapeDoctorProfile(url) {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
-  await page.goto(doctor.uri, { waitUntil: "networkidle2" });
 
+  // Navigate to the URL
+  await page.goto(url, { waitUntil: "networkidle2" });
+
+  // Extract information from the page
   const doctorData = await page.evaluate(() => {
     const result = {};
 
-    // Extract address text content
+    // Extract address
     const addressEl =
       document.querySelector("p i.fa-map-marker")?.parentElement;
     result.address = addressEl ? addressEl.textContent.trim() : "";
@@ -133,61 +130,34 @@ async function scrapeDoctorProfile(doctor) {
     return result;
   });
 
-  if (doctor.address) {
-    doctorData.city = await addressToCity(doctor.address);
+  // Clean the address
+  if (doctorData.address) {
+    const cleanedAddr = cleanAddress(doctorData.address);
+    doctorData.address = cleanedAddr;
+
+    // Attempt to get the city from the address
+    doctorData.city = await addressToCity(cleanedAddr);
   } else {
     doctorData.city = null;
   }
+
   await browser.close();
   return doctorData;
 }
-async function cleanAndProcessDoctors(startIndex, endIndex) {
-  try {
-    await mongoose.connect(MONGODB_URI);
 
-    // Query doctors in the given range
-    const doctors = await Doctor.find({
-      $or: [{ specialty: { $exists: false } }, { specialty: "" }],
-    })
-      .skip(startIndex)
-      .limit(endIndex - startIndex + 1);
+// --- MAIN EXECUTION ---
 
-    for (const doctor of doctors) {
-      const originalAddress = doctor.address || "";
-      const cleanedAddr = cleanAddress(originalAddress);
-
-      // Update the address if necessary
-      if (cleanedAddr && cleanedAddr !== originalAddress) {
-        doctor.address = cleanedAddr;
-        await doctor.save();
-      }
-
-      // Scrape profile data and update doctor document
-      if (doctor.uri) {
-        const scrapedData = await scrapeDoctorProfile(doctor);
-        console.log("Scraped Data:", scrapedData);
-        if (scrapedData) {
-          // Update fields if scraped data is available
-          if (scrapedData.city) doctor.city = scrapedData.city;
-          if (scrapedData.mobile) doctor.mobile = scrapedData.mobile;
-          if (scrapedData.phone) doctor.phone = scrapedData.phone;
-          if (scrapedData.specialty) doctor.specialty = scrapedData.specialty;
-
-          await doctor.save();
-          console.log(`Updated info for doctor ${doctor._id}`);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error processing doctors:", error);
-  } finally {
-    await mongoose.disconnect();
+(async () => {
+  const url = process.argv[2];
+  if (!url) {
+    console.error("Usage: node scrape-doctor.js <doctorProfileURL>");
+    process.exit(1);
   }
-}
 
-// Parse command-line arguments for startIndex and endIndex
-const [startArg, endArg] = process.argv.slice(2);
-const startIndex = parseInt(startArg, 10) || 0;
-const endIndex = parseInt(endArg, 10) || startIndex;
-
-cleanAndProcessDoctors(startIndex, endIndex).catch(console.error);
+  try {
+    const data = await scrapeDoctorProfile(url);
+    console.log("Scraped Doctor Data:\n", data);
+  } catch (error) {
+    console.error("Error scraping URL:", error);
+  }
+})();
