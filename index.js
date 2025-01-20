@@ -89,7 +89,15 @@ async function addressToCity(address) {
 async function scrapeDoctorProfile(doctor) {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
-  await page.goto(doctor.uri, { waitUntil: "networkidle2" });
+
+  try {
+    // Attempt to navigate to the doctor's URI with a timeout
+    await page.goto(doctor.uri, { waitUntil: "networkidle2", timeout: 30000 });
+  } catch (navError) {
+    console.error(`Navigation timed out for ${doctor.uri}:`, navError);
+    await browser.close();
+    return {}; // Return an empty object on navigation timeout
+  }
 
   const doctorData = await page.evaluate(() => {
     const result = {};
@@ -133,14 +141,17 @@ async function scrapeDoctorProfile(doctor) {
     return result;
   });
 
+  // Attempt to derive city from address if available
   if (doctor.address) {
     doctorData.city = await addressToCity(doctor.address);
   } else {
     doctorData.city = null;
   }
+
   await browser.close();
   return doctorData;
 }
+
 async function cleanAndProcessDoctors(startIndex, endIndex) {
   try {
     await mongoose.connect(MONGODB_URI);
@@ -149,8 +160,6 @@ async function cleanAndProcessDoctors(startIndex, endIndex) {
     const doctors = await Doctor.find({
       $or: [{ specialty: { $exists: false } }, { specialty: "" }],
     })
-      .skip(startIndex)
-      .limit(endIndex - startIndex + 1);
 
     for (const doctor of doctors) {
       const originalAddress = doctor.address || "";
