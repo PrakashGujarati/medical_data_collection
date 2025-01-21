@@ -1,44 +1,11 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const mongoose = require("mongoose");
 const BASE_URL = "https://www.drdata.in";
 
 // Get page range from command-line arguments
 const args = process.argv.slice(2);
 const startPage = parseInt(args[0], 10) || 1;
 const endPage = parseInt(args[1], 10) || 100;
-
-// Connect to MongoDB
-const MONGO_URI =
-  "mongodb+srv://iwellnessai:SwxrM8w5eSGppWKS@cluster0.gh31p.mongodb.net/medipractweb_hospital"; // Update with your actual connection string
-mongoose.connect(MONGO_URI);
-mongoose.connection.on("connected", () => {
-  console.log("Mongoose connected to", MONGO_URI);
-});
-mongoose.connection.on("error", (err) => {
-  console.error("Mongoose connection error:", err);
-});
-const doctorSchema = new mongoose.Schema({
-  name: String,
-  specialization: String,
-  degree: String,
-  state: String,
-  city: String,
-  profile_url: String,
-  area_of_practice: String,
-  practicing_since: String,
-  medical_council: String,
-  registration_number: String,
-  clinic_hospital: String,
-  date_of_birth: String,
-  address: String,
-  phone_number: String,
-  graduation_course: String,
-  post_graduation_course: String,
-  about_doctor: String,
-});
-
-const Doctor = mongoose.model("Doctor", doctorSchema);
 
 async function fetchDoctorProfile(profileUrl) {
   if (!profileUrl) return {}; // Return empty if no profile URL
@@ -95,6 +62,7 @@ async function fetchDoctorProfile(profileUrl) {
 
 async function scrapeDoctors() {
   try {
+    const doctors = [];
     for (let page = startPage; page <= endPage; page++) {
       console.log(`Scraping page ${page}...`);
       const { data } = await axios.get(
@@ -123,8 +91,7 @@ async function scrapeDoctors() {
           if (!profileDetails) continue; // Skip invalid profiles
         }
 
-        // Create a new Doctor document
-        const doctorData = {
+        doctors.push({
           name,
           specialization,
           degree,
@@ -132,23 +99,15 @@ async function scrapeDoctors() {
           city,
           profile_url: profileUrl,
           ...profileDetails, // Merge profile details
-        };
+        });
 
-        try {
-          const doctor = new Doctor(doctorData);
-          await doctor.save();
-          console.log(`Saved: ${name}`);
-        } catch (saveError) {
-          console.error(`Error saving doctor ${name}:`, saveError);
-        }
+        console.log(`Scraped: ${name}`);
       }
     }
+
+    console.log(JSON.stringify(doctors, null, 2));
   } catch (error) {
     console.error("Error scraping data:", error);
-  } finally {
-    mongoose.connection.close(() => {
-      console.log("Mongoose connection closed.");
-    });
   }
 }
 
